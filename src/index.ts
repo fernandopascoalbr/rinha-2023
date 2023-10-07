@@ -6,7 +6,8 @@ import { Validation } from './validation';
 import { Middleware } from './middleware';
 import { Database } from './database';
 import { Repository } from './repository';
-
+import { cpus } from 'node:os';
+import cluster from 'node:cluster';
 
 const validation = new Validation();
 const database = new Database();
@@ -22,10 +23,7 @@ app.use(bodyParser.json());
 
 app
   .get('/', controller.teste.bind(controller))
-  .get(
-    '/contagem-pessoas',
-    controller.getPessoasCount.bind(controller)
-  )
+  .get('/contagem-pessoas', controller.getPessoasCount.bind(controller))
   .get(
     '/pessoas/:id',
     middleware.validateUuid.bind(middleware),
@@ -42,11 +40,24 @@ app
     controller.getPessoaByTerm.bind(controller)
   );
 
-app.use(middleware.handlerError.bind(middleware))
+app.use(middleware.handlerError.bind(middleware));
 
+const CPUS = cpus().length;
 
-app.listen(process.env.PORT, () => {
-  console.info(`Listen at ${process.env.PORT}`);
-});
+if (cluster.isPrimary) {
+  for (let i = 0; i < CPUS; i++) {
+    cluster.fork();
+  }
 
-export { app };
+  cluster.on('exit', (worker, code, signal) => {
+    console.info(
+      `cluster exit: worker ${worker.process.pid} exit code ${code} signal ${signal}`
+    );
+    
+    cluster.fork();
+  });
+} else {
+  app.listen(process.env.PORT, () => {
+    console.info(`Listen at port: ${process.env.PORT} pid: ${process.pid}`);
+  });
+}
