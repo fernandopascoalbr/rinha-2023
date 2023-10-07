@@ -6,9 +6,9 @@ export class Middleware {
 
   public validateUuid(req: Request, res: Response, next: NextFunction) {
     const id = req.params.id;
-    const err = this.validation.uuid(id).run();
+    const isValid = this.validation.uuid(id);
 
-    if (err) {
+    if (!isValid) {
       res.status(404).end();
       return;
     }
@@ -19,42 +19,40 @@ export class Middleware {
   public validateQuery(req: Request, res: Response, next: NextFunction) {
     const term = req.query.t;
 
-    const err = this.validation.requiredStr(term as string).run();
-
-    if (err) {
-      res.status(400).end();
-      return;
+    if(!term) {
+      res.status(400).end()
+      return
     }
 
     next();
   }
 
   public validateBodyPessoa(req: Request, res: Response, next: NextFunction) {
-    const obj = { ...req.body };
+    const { nome, apelido, nascimento, stack } = req.body;
 
-    let err = this.validation
-      .isStrOrNull(obj.nome)
-      .isStrOrNull(obj.apelido)
-      .isStrOrNull(obj.nascimento)
-      .arrayStrNullable(obj.stack)
-      .run();
+    const values = [nome, apelido, nascimento];
+    const stk = stack === null ? [] : stack.map((s: any) => typeof s);
 
-    if (err) {
+    if (
+      values.some((t: string) => typeof t !== 'string' || t !== null) ||
+      stk.some((t: string) => t !== 'string')
+    ) {
       res.status(400).end();
       return;
     }
 
-    err = this.validation
-      .requiredStr(obj.nome)
-      .requiredStr(obj.apelido)
-      .requiredStr(obj.nascimento)
-      .max(obj.apelido, 32)
-      .max(obj.nome, 100)
-      .date(obj.nascimento)
-      .run();
+    if([...values, ...stk].some((v: string) => !v)) {
+      res.status(422).end()
+      return;
+    }
 
-    if (err) {
-      res.status(422).end();
+    if(nome.length > 100 || apelido > 32 || stk?.some((s: string) => s.length > 32)) {
+      res.status(422).end()
+      return;
+    }
+
+    if(!this.validation.date(nascimento)) {
+      res.status(422).end()
       return;
     }
 
